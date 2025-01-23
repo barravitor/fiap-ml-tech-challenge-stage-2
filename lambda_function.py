@@ -42,15 +42,16 @@ def Request():
 
     return results
 
-def SaveS3File(parquet_file_name: str):
+def SaveS3File(parquet_file_name: str, s3_file_path: str):
     s3 = boto3.client('s3')
 
     try:
-        s3.upload_file(f"/tmp/{parquet_file_name}", "fiap-ml-tech-challenge", f"raw/{parquet_file_name}")
+        s3.upload_file(f"/tmp/{parquet_file_name}", "fiap-ml-tech-challenge", s3_file_path)
     except Exception as e:
         return {'statusCode': 500, 'body': f"Error uploading to S3: {str(e)}"}
 
 def lambda_handler(event, context):
+
     results = Request()
 
     if not results:
@@ -58,7 +59,8 @@ def lambda_handler(event, context):
 
     df = pd.DataFrame(results)
 
-    df['date'] = pd.to_datetime('today').strftime('%Y-%m-%d')
+    current_date_formatted: str = pd.to_datetime('today').strftime('%Y-%m-%d')
+    df['date'] = current_date_formatted
     df['theoricalQty'] = df['theoricalQty'].apply(clean_and_convert, target_type='int')
     df['part'] = df['part'].apply(clean_and_convert, target_type='float')
     df['partAcum'] = df['partAcum'].apply(clean_and_convert, target_type='float')
@@ -66,7 +68,8 @@ def lambda_handler(event, context):
     parquet_file_name = "Bovespa.parquet"
     df.to_parquet(f"/tmp/{parquet_file_name}", engine="fastparquet", index=False)
 
-    SaveS3File(parquet_file_name)
+    SaveS3File(parquet_file_name, f"old/{current_date_formatted}")
+    SaveS3File(parquet_file_name, f"raw/{parquet_file_name}")
 
     return {'statusCode': 200, 'body': 'Data saved successfully!'}
 
